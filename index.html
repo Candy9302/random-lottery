@@ -18,23 +18,18 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- SweetAlert2 -->
+    <!-- SweetAlert2 / Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 
     <style>
-      #wheel {
-        border: 2px solid #ccc;
-        border-radius: 50%;
-        background: #fff;
-      }
       .card {
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
       }
       .list-group-item {
         cursor: grab;
       }
+
       /* 參與名單三行收折 */
       #wheelNames {
         white-space: normal;
@@ -46,6 +41,325 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
+
+      /* ===== 扭蛋機（基礎） ===== */
+      .gacha {
+        position: relative;
+        width: 300px;
+        height: 370px;
+      }
+      .gacha-glass {
+        position: absolute;
+        left: 50%;
+        top: 18px;
+        transform: translateX(-50%);
+        width: 230px;
+        height: 230px;
+        border-radius: 50%;
+        background: radial-gradient(
+            ellipse at 30% 30%,
+            rgba(255, 255, 255, 0.8),
+            rgba(255, 255, 255, 0.2) 40%,
+            rgba(255, 255, 255, 0) 60%
+          ),
+          rgba(135, 206, 250, 0.35);
+        border: 4px solid #cce9ff;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.06);
+      }
+      .gacha-neck {
+        position: absolute;
+        left: 50%;
+        top: 240px;
+        transform: translateX(-50%);
+        width: 120px;
+        height: 16px;
+        background: #b52d2d;
+        border-radius: 8px;
+      }
+      .gacha-body {
+        position: absolute;
+        left: 50%;
+        top: 258px;
+        transform: translateX(-50%);
+        width: 260px;
+        height: 72px;
+        background: #e84545;
+        border-radius: 12px;
+        box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.08);
+      }
+      .gacha-slot {
+        position: absolute;
+        left: 50%;
+        top: 18px;
+        transform: translateX(-50%);
+        width: 120px;
+        height: 24px;
+        background: #333;
+        border-radius: 6px;
+        box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15);
+      }
+      .gacha-handle {
+        position: absolute;
+        right: -30px;
+        top: 10px;
+        width: 50px;
+        height: 50px;
+      }
+      .gacha-handle .bar {
+        position: absolute;
+        left: 22px;
+        top: 0;
+        width: 6px;
+        height: 36px;
+        background: #888;
+        border-radius: 3px;
+        transform-origin: top center;
+        transition: transform 0.3s ease;
+      }
+      .gacha-handle .knob {
+        position: absolute;
+        left: 10px;
+        bottom: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #ffd27a, #ffa500);
+        box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15);
+        transform-origin: 50% -10px;
+        transition: transform 0.3s ease;
+      }
+      .gacha-tray {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 180px;
+        height: 40px;
+        background: #d33;
+        border-radius: 0 0 12px 12px;
+        box-shadow: inset 0 6px 0 rgba(0, 0, 0, 0.08);
+      }
+      .gacha-tray .mouth {
+        position: absolute;
+        left: 50%;
+        top: -12px;
+        transform: translateX(-50%);
+        width: 110px;
+        height: 20px;
+        background: #555;
+        border-radius: 10px;
+      }
+      .gacha.crank .gacha-handle .bar {
+        transform: rotate(18deg);
+      }
+      .gacha.crank .gacha-handle .knob {
+        transform: rotate(24deg);
+      }
+
+      /* 掉落膠囊 */
+      .capsule {
+        --hue: 210;
+        position: absolute;
+        left: 50%;
+        top: 40px;
+        transform: translate(-50%, -160px);
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          hsl(var(--hue) 90% 70%),
+          hsl(var(--hue) 80% 45%)
+        );
+        box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.15),
+          0 3px 6px rgba(0, 0, 0, 0.15);
+        z-index: 5;
+      }
+      .capsule.animate {
+        animation: capsule-drop 0.9s cubic-bezier(0.2, 0.8, 0.2, 1),
+          capsule-to-tray 0.7s linear 0.9s forwards,
+          capsule-bounce 0.5s ease-out 1.6s forwards;
+      }
+      @keyframes capsule-drop {
+        0% {
+          transform: translate(-50%, -160px);
+        }
+        85% {
+          transform: translate(-50%, 90px);
+        }
+        100% {
+          transform: translate(-50%, 105px);
+        }
+      }
+      @keyframes capsule-to-tray {
+        0% {
+          transform: translate(-50%, 105px);
+        }
+        100% {
+          transform: translate(65px, 165px);
+        }
+      }
+      @keyframes capsule-bounce {
+        0% {
+          transform: translate(65px, 165px);
+        }
+        50% {
+          transform: translate(65px, 155px);
+        }
+        100% {
+          transform: translate(65px, 165px);
+        }
+      }
+
+      /* ===== 升級：分體 + 金色卡片 ===== */
+      .capsule-x {
+        --hue: 210;
+        position: absolute;
+        left: 50%;
+        top: 40px;
+        transform: translate(65px, 165px);
+        width: 44px;
+        height: 44px;
+        z-index: 6;
+      }
+      .capsule-x .half {
+        position: absolute;
+        left: 0;
+        width: 44px;
+        height: 22px;
+        background: radial-gradient(
+          circle at 30% 30%,
+          hsl(var(--hue) 90% 70%),
+          hsl(var(--hue) 80% 45%)
+        );
+        box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.12),
+          0 2px 6px rgba(0, 0, 0, 0.18);
+      }
+      .capsule-x .half.top {
+        top: 0;
+        border-radius: 22px 22px 0 0;
+        transform-origin: 50% 100%;
+      }
+      .capsule-x .half.bottom {
+        bottom: 0;
+        border-radius: 0 0 22px 22px;
+        transform-origin: 50% 0%;
+      }
+      .capsule-x .ticket {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -40%) scale(0.7);
+        width: 160px;
+        min-height: 64px;
+        padding: 8px 10px;
+        text-align: center;
+        background: linear-gradient(135deg, #fff6cc, #ffe08a, #ffcc4d, #ffd36b);
+        color: #261b00;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25),
+          inset 0 2px 0 rgba(255, 255, 255, 0.6);
+        opacity: 0;
+      }
+      .capsule-x .ticket .t1 {
+        font-weight: 800;
+        font-size: 14px;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .capsule-x .ticket .t2 {
+        margin-top: 4px;
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .capsule-x .ticket::after {
+        content: "";
+        position: absolute;
+        left: -30%;
+        top: 0;
+        bottom: 0;
+        width: 40%;
+        transform: skewX(-20deg);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.6),
+          transparent
+        );
+        filter: blur(1px);
+        opacity: 0;
+      }
+      .capsule-x.reveal .half.top {
+        animation: capTopOpen 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+      .capsule-x.reveal .half.bottom {
+        animation: capBottomOpen 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      }
+      .capsule-x.reveal .ticket {
+        animation: ticketRise 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s
+          forwards;
+      }
+      .capsule-x.reveal .ticket::after {
+        animation: ticketShine 1.2s ease 0.35s forwards;
+      }
+      .capsule-x.fadeout {
+        animation: capFade 0.35s ease forwards;
+      }
+      @keyframes capTopOpen {
+        0% {
+          transform: translateY(0) rotate(0);
+        }
+        100% {
+          transform: translateY(-26px) rotate(-18deg);
+        }
+      }
+      @keyframes capBottomOpen {
+        0% {
+          transform: translateY(0) rotate(0);
+        }
+        100% {
+          transform: translateY(26px) rotate(18deg);
+        }
+      }
+      @keyframes ticketRise {
+        0% {
+          transform: translate(-50%, -40%) scale(0.7);
+          opacity: 0;
+        }
+        60% {
+          transform: translate(-50%, -72%) scale(1.05);
+          opacity: 1;
+        }
+        100% {
+          transform: translate(-50%, -68%) scale(1);
+          opacity: 1;
+        }
+      }
+      @keyframes ticketShine {
+        0% {
+          left: -30%;
+          opacity: 0;
+        }
+        20% {
+          opacity: 0.9;
+        }
+        100% {
+          left: 110%;
+          opacity: 0;
+        }
+      }
+      @keyframes capFade {
+        to {
+          opacity: 0;
+          transform: translate(65px, 175px) scale(0.92);
+        }
+      }
     </style>
   </head>
   <body>
@@ -53,14 +367,13 @@
       <!-- 活動名稱區 -->
       <div class="row mb-3">
         <div class="col-12 d-flex align-items-center">
-          <!-- 放同層的圖片檔名 -->
           <img
             src="gce.png"
             alt="活動Logo"
             style="height: 40px; margin-right: 10px"
           />
           <h2 class="mb-0">齊心協力 益起健走</h2>
-          <div class="ms-auto d-flex align-items-center gap-3">
+          <div class="ms-auto d-flex align-items-center gap-2">
             <div class="form-check form-switch">
               <input
                 class="form-check-input"
@@ -185,18 +498,32 @@
           </div>
         </div>
 
-        <!-- 右側：轉盤與紀錄 -->
+        <!-- 右側：扭蛋 & 紀錄 -->
         <div class="col-md-7">
           <div class="card mb-3">
-            <div class="card-header">抽獎轉盤區</div>
+            <div class="card-header">抽獎扭蛋區</div>
             <div class="card-body text-center">
               <div id="currentPrize" class="mb-2 fw-bold"></div>
-              <canvas
-                id="wheel"
-                width="300"
-                height="300"
-                style="margin-bottom: 10px"
-              ></canvas>
+
+              <!-- 扭蛋機 -->
+              <div
+                id="gachaMachine"
+                class="gacha mx-auto mb-2"
+                role="button"
+                aria-label="點擊扭蛋機抽獎"
+              >
+                <div class="gacha-glass"></div>
+                <div class="gacha-neck"></div>
+                <div class="gacha-body">
+                  <div class="gacha-slot"></div>
+                  <div class="gacha-handle">
+                    <div class="bar"></div>
+                    <div class="knob"></div>
+                  </div>
+                </div>
+                <div class="gacha-tray"><div class="mouth"></div></div>
+              </div>
+
               <div>
                 <button class="btn btn-warning" id="drawBtn">抽獎</button>
               </div>
@@ -285,7 +612,7 @@
       let isDrawing = false;
       let enableSound = true;
 
-      // ===== 音效（Web Audio 產生：轉盤滴答 & 中獎小號） =====
+      // ===== 音效 =====
       let audioCtx = null;
       function ensureAudio() {
         if (!audioCtx)
@@ -294,25 +621,23 @@
       function playTick() {
         if (!enableSound) return;
         ensureAudio();
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
+        const o = audioCtx.createOscillator(),
+          g = audioCtx.createGain();
         o.type = "square";
         o.frequency.value = 900;
         g.gain.value = 0.03;
         o.connect(g).connect(audioCtx.destination);
         o.start();
-        setTimeout(() => {
-          o.stop();
-        }, 40);
+        setTimeout(() => o.stop(), 40);
       }
       function playWin() {
         if (!enableSound) return;
         ensureAudio();
-        const now = audioCtx.currentTime;
-        const freqs = [523.25, 659.25, 783.99, 1046.5]; // C-E-G-C
+        const now = audioCtx.currentTime,
+          freqs = [523.25, 659.25, 783.99, 1046.5];
         freqs.forEach((f, i) => {
-          const o = audioCtx.createOscillator();
-          const g = audioCtx.createGain();
+          const o = audioCtx.createOscillator(),
+            g = audioCtx.createGain();
           o.type = "sine";
           o.frequency.setValueAtTime(f, now + i * 0.12);
           g.gain.setValueAtTime(0.0001, now + i * 0.12);
@@ -323,16 +648,31 @@
           o.stop(now + i * 0.12 + 0.28);
         });
       }
+      function playOpen() {
+        if (!enableSound) return;
+        ensureAudio();
+        const o = audioCtx.createOscillator(),
+          g = audioCtx.createGain();
+        o.type = "triangle";
+        o.frequency.value = 220;
+        g.gain.value = 0.001;
+        o.connect(g).connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        g.gain.exponentialRampToValueAtTime(0.15, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+        o.start(now);
+        o.stop(now + 0.22);
+      }
       $("#soundSwitch").on("change", function () {
         enableSound = this.checked;
       });
 
-      // ===== 煙火（confetti） =====
+      // ===== 煙火 =====
       function fireConfetti() {
         const end = Date.now() + 800;
-        (function frame() {
+        (function f() {
           confetti({ particleCount: 20, spread: 70, origin: { y: 0.6 } });
-          if (Date.now() < end) requestAnimationFrame(frame);
+          if (Date.now() < end) requestAnimationFrame(f);
         })();
       }
 
@@ -344,7 +684,7 @@
           .map((x) => x.trim())
           .filter((x) => x !== "");
         $("#count").text(participants.length);
-        updateWheel();
+        updateWheel(); // 沒有畫布會自動 return
         updateNamesArea();
       }
       $("#participants").on("input", updateParticipants);
@@ -354,7 +694,8 @@
         updateParticipants();
       });
 
-      // ===== CSV 匯入/匯出：名單 =====
+      // ===== CSV（略：你原本的匯入匯出程式全部保留） =====
+      // --- 名單 CSV ---
       $("#importNamesCsvBtn").on("click", () =>
         $("#importNamesCsvInput").click()
       );
@@ -363,19 +704,17 @@
         if (!file) return;
         file.text().then((text) => {
           const rows = parseCSV(text);
-          if (rows.length === 0) {
+          if (rows.length === 0)
             return Swal.fire("匯入失敗", "檔案內容為空", "error");
-          }
-          let header = rows[0].map((x) => x.toLowerCase());
-          let hasHeader = header.includes("name") || header.includes("姓名");
-          let start = hasHeader ? 1 : 0;
-          let names = [];
+          const header = rows[0].map((x) => x.toLowerCase());
+          const hasHeader = header.includes("name") || header.includes("姓名");
+          const start = hasHeader ? 1 : 0;
+          const names = [];
           for (let i = start; i < rows.length; i++) {
-            const row = rows[i];
-            const val = (row[0] || "").trim();
-            if (val) names.push(val);
+            const v = (rows[i][0] || "").trim();
+            if (v) names.push(v);
           }
-          if (names.length === 0)
+          if (!names.length)
             return Swal.fire("匯入失敗", "找不到任何名字", "error");
           $("#participants").val(names.join("\n"));
           updateParticipants();
@@ -383,12 +722,12 @@
           Swal.fire("匯入完成", `共 ${names.length} 筆名單`, "success");
         });
       });
-      $("#exportNamesCsvBtn").on("click", function () {
+      $("#exportNamesCsvBtn").on("click", () => {
         const csv = toCSV([["name"], ...participants.map((n) => [n])]);
         downloadCsv(csv, "participants.csv");
       });
 
-      // ===== CSV 匯入/匯出：獎項 =====
+      // --- 獎項 CSV ---
       $("#importPrizesCsvBtn").on("click", () =>
         $("#importPrizesCsvInput").click()
       );
@@ -397,15 +736,14 @@
         if (!file) return;
         file.text().then((text) => {
           const rows = parseCSV(text);
-          if (rows.length === 0) {
+          if (rows.length === 0)
             return Swal.fire("匯入失敗", "檔案內容為空", "error");
-          }
-          let header = rows[0].map((x) => x.toLowerCase());
-          let hasHeader =
+          const header = rows[0].map((x) => x.toLowerCase());
+          const hasHeader =
             header.includes("name") ||
             header.includes("獎項") ||
             header.includes("prize");
-          let start = hasHeader ? 1 : 0;
+          const start = hasHeader ? 1 : 0;
           const list = [];
           for (let i = start; i < rows.length; i++) {
             const r = rows[i];
@@ -414,7 +752,7 @@
             if (name && Number.isFinite(count) && count > 0)
               list.push({ name, count });
           }
-          if (list.length === 0)
+          if (!list.length)
             return Swal.fire(
               "匯入失敗",
               "無有效獎項資料（需兩欄：name,count）",
@@ -427,7 +765,7 @@
           Swal.fire("匯入完成", `共 ${list.length} 個獎項`, "success");
         });
       });
-      $("#exportPrizesCsvBtn").on("click", function () {
+      $("#exportPrizesCsvBtn").on("click", () => {
         const rows = [
           ["name", "count"],
           ...prizes.map((p) => [p.name, String(p.count)]),
@@ -435,8 +773,8 @@
         downloadCsv(toCSV(rows), "prizes.csv");
       });
 
-      // ===== 匯出中獎名單 =====
-      $("#exportWinnersCsvBtn").on("click", function () {
+      // --- 中獎 CSV ---
+      $("#exportWinnersCsvBtn").on("click", () => {
         const rows = [
           ["order", "prize", "name", "time"],
           ...winners.map((w) => [w.order, w.prize, w.name, w.time]),
@@ -444,7 +782,7 @@
         downloadCsv(toCSV(rows), "winners.csv");
       });
 
-      // ===== CSV 工具 =====
+      // CSV 工具
       function downloadCsv(csv, filename) {
         const blob = new Blob(["\ufeff" + csv], {
           type: "text/csv;charset=utf-8;",
@@ -460,23 +798,20 @@
         return rows
           .map((r) =>
             r
-              .map((cell) => {
-                const s = String(cell ?? "");
-                if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-                return s;
+              .map((c) => {
+                const s = String(c ?? "");
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
               })
               .join(",")
           )
           .join("\n");
       }
-      // 簡單 CSV 解析（支援引號、逗號、換行）
       function parseCSV(text) {
         const rows = [];
-        let row = [];
-        let i = 0;
-        let cur = "";
-        let inQ = false;
-        // 去除 BOM
+        let row = [],
+          i = 0,
+          cur = "",
+          inQ = false;
         if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
         while (i < text.length) {
           const ch = text[i];
@@ -490,86 +825,78 @@
               inQ = false;
               i++;
               continue;
-            } else {
-              cur += ch;
-              i++;
-              continue;
-            }
-          } else {
-            if (ch === '"') {
-              inQ = true;
-              i++;
-              continue;
-            }
-            if (ch === ",") {
-              row.push(cur);
-              cur = "";
-              i++;
-              continue;
-            }
-            if (ch === "\n") {
-              row.push(cur);
-              rows.push(row);
-              row = [];
-              cur = "";
-              i++;
-              continue;
-            }
-            if (ch === "\r") {
-              i++;
-              continue;
             }
             cur += ch;
             i++;
+            continue;
           }
+          if (ch === '"') {
+            inQ = true;
+            i++;
+            continue;
+          }
+          if (ch === ",") {
+            row.push(cur);
+            cur = "";
+            i++;
+            continue;
+          }
+          if (ch === "\n") {
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = "";
+            i++;
+            continue;
+          }
+          if (ch === "\r") {
+            i++;
+            continue;
+          }
+          cur += ch;
+          i++;
         }
         row.push(cur);
         rows.push(row);
-        // 去掉可能的空白行
         return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
       }
 
       // ===== 獎項新增 / 排序 / 刪除 =====
       $("#addPrize").on("click", function () {
-        const name = $("#prizeName").val().trim();
-        const count = parseInt($("#prizeCount").val(), 10);
-        if (!name || !Number.isFinite(count) || count <= 0) {
+        const name = $("#prizeName").val().trim(),
+          count = parseInt($("#prizeCount").val(), 10);
+        if (!name || !Number.isFinite(count) || count <= 0)
           return Swal.fire(
             "資料不完整",
             "請輸入有效的獎項名稱與數量",
             "warning"
           );
-        }
         prizes.push({ name, count });
         $("#prizeName").val("");
         $("#prizeCount").val(1);
         renderPrizes();
         updateCurrentPrize();
       });
-
       function renderPrizes() {
         const $list = $("#prizeList").empty();
-        prizes.forEach((p, i) => {
-          $list.append(
-            `<div class="list-group-item d-flex justify-content-between align-items-center" data-idx="${i}">
-           <span>${i + 1}. ${p.name} <span class="badge bg-secondary">${
-              p.count
-            }</span></span>
-           <button type="button" class="btn btn-danger btn-sm removePrize">刪除</button>
-         </div>`
-          );
-        });
-        // sortable
+        prizes.forEach((p, i) =>
+          $list.append(`<div class="list-group-item d-flex justify-content-between align-items-center" data-idx="${i}">
+        <span>${i + 1}. ${p.name} <span class="badge bg-secondary">${
+            p.count
+          }</span></span>
+        <button type="button" class="btn btn-danger btn-sm removePrize">刪除</button>
+      </div>`)
+        );
         $("#prizeList").sortable({
           update: function () {
             const old = prizes.slice();
-            const newOrderIdx = $(this)
+            const order = $(this)
               .children()
               .map(function () {
                 return $(this).data("idx");
               })
               .get();
-            prizes = newOrderIdx.map((idx) => old[idx]);
+            prizes = order.map((idx) => old[idx]);
             renderPrizes();
             updateCurrentPrize();
           },
@@ -582,145 +909,109 @@
         updateCurrentPrize();
       });
 
-      // ===== 轉盤 =====
+      // =====（舊）轉盤：保留空實作以相容既有呼叫 =====
       function updateWheel() {
-        const canvas = document.getElementById("wheel");
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        const names = participants;
-        const len = names.length;
-        ctx.clearRect(0, 0, 300, 300);
-        if (!len) return;
-        const angle = (2 * Math.PI) / len;
-        for (let i = 0; i < len; i++) {
-          ctx.beginPath();
-          ctx.moveTo(150, 150);
-          ctx.arc(150, 150, 140, i * angle, (i + 1) * angle);
-          ctx.closePath();
-          ctx.fillStyle = `hsl(${(i * 360) / len},70%,70%)`;
-          ctx.fill();
-          ctx.save();
-          ctx.translate(150, 150);
-          ctx.rotate((i + 0.5) * angle);
-          ctx.textAlign = "right";
-          ctx.font = "16px Arial";
-          ctx.fillStyle = "#333";
-          ctx.fillText(names[i], 130, 8);
-          ctx.restore();
-        }
-        // 指針
-        ctx.beginPath();
-        ctx.moveTo(150, 10);
-        ctx.lineTo(140, 30);
-        ctx.lineTo(160, 30);
-        ctx.closePath();
-        ctx.fillStyle = "#d9534f";
-        ctx.fill();
+        /* 已改扭蛋機，這裡留白即可 */
       }
 
-      function highlightWheel(idx) {
-        updateWheel();
-        const canvas = document.getElementById("wheel");
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        const len = participants.length;
-        if (!len) return;
-        const angle = (2 * Math.PI) / len;
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(150, 150);
-        ctx.arc(150, 150, 140, idx * angle, (idx + 1) * angle);
-        ctx.closePath();
-        ctx.fillStyle = "rgba(255,215,0,.5)";
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // ===== 參與名單顯示（3 行收折） =====
+      // ===== 名單顯示（3 行收折） =====
       function updateNamesArea() {
         $("#wheelNames").text(participants.join(", "));
         clampNames(true);
-        // 判斷是否需要顯示按鈕（內容高度超過 3 行）
         const el = document.getElementById("wheelNames");
-        const needBtn = el.scrollHeight > el.clientHeight + 1;
-        $("#toggleNames").toggle(needBtn);
+        $("#toggleNames").toggle(el.scrollHeight > el.clientHeight + 1);
       }
-      function clampNames(shouldClamp) {
-        const $names = $("#wheelNames");
-        if (shouldClamp) {
-          $names.addClass("clamp-3");
+      function clampNames(should) {
+        const $n = $("#wheelNames");
+        if (should) {
+          $n.addClass("clamp-3");
           $("#toggleNames").text("展開全部");
         } else {
-          $names.removeClass("clamp-3");
+          $n.removeClass("clamp-3");
           $("#toggleNames").text("收合");
         }
-        $("#toggleNames").data("expanded", !shouldClamp);
+        $("#toggleNames").data("expanded", !should);
       }
       $("#toggleNames").on("click", function () {
         const expanded = $(this).data("expanded") === true;
-        clampNames(expanded); // 如果已展開 -> 收合；若收合 -> 展開
+        clampNames(expanded);
       });
 
       // ===== 顯示目前獎項 =====
       function updateCurrentPrize() {
-        if (prizes.length > 0 && currentPrizeIdx < prizes.length) {
+        if (prizes.length > 0 && currentPrizeIdx < prizes.length)
           $("#currentPrize").text("當前獎項：" + prizes[currentPrizeIdx].name);
-        } else {
-          $("#currentPrize").text("所有獎項已抽完");
-        }
+        else $("#currentPrize").text("所有獎項已抽完");
+      }
+
+      // ===== 升級版扭蛋動畫：掉落→分體→金色卡片 =====
+      function runGachaAnimationPro(winnerName, prizeName, done) {
+        const $m = $("#gachaMachine");
+        $m.addClass("crank");
+        setTimeout(() => $m.removeClass("crank"), 700);
+
+        const hue = Math.floor(Math.random() * 360);
+        const $drop = $('<div class="capsule"></div>').css("--hue", hue);
+        $m.append($drop);
+        playTick();
+        requestAnimationFrame(() => $drop.addClass("animate"));
+
+        setTimeout(() => {
+          $drop.remove();
+          const $r = $(`
+          <div class="capsule-x" style="--hue:${hue}">
+            <div class="half top"></div>
+            <div class="half bottom"></div>
+            <div class="ticket"><div class="t1">🏆 ${prizeName}</div><div class="t2">👤 ${winnerName}</div></div>
+          </div>`);
+          $m.append($r);
+          playOpen();
+          requestAnimationFrame(() => $r.addClass("reveal"));
+          fireConfetti();
+          setTimeout(() => {
+            $r.addClass("fadeout");
+            done && done();
+            setTimeout(() => $r.remove(), 450);
+          }, 1100);
+        }, 2200);
       }
 
       // ===== 抽獎 =====
-      const winnerModalEl = document.getElementById("winnerModal");
-      const bsWinnerModal = new bootstrap.Modal(winnerModalEl);
+      const bsWinnerModal = new bootstrap.Modal(
+        document.getElementById("winnerModal")
+      );
+      $("#gachaMachine").on("click", () => $("#drawBtn").trigger("click"));
 
       $("#drawBtn").on("click", function () {
         if (isDrawing) return;
-
-        if (currentPrizeIdx >= prizes.length) {
+        if (currentPrizeIdx >= prizes.length)
           return Swal.fire(
             "所有獎項已抽完",
             "請新增獎項或重新整理頁面",
             "info"
           );
-        }
-        if (participants.length === 0 || prizes.length === 0) {
+        if (participants.length === 0 || prizes.length === 0)
           return Swal.fire("資料不足", "請確認名單與獎項皆已設定", "warning");
-        }
         if (prizes[currentPrizeIdx].count <= 0) {
           currentPrizeIdx++;
           updateCurrentPrize();
-          if (currentPrizeIdx >= prizes.length) {
-            return Swal.fire(
-              "所有獎項已抽完",
-              "請新增獎項或重新整理頁面",
-              "info"
-            );
-          }
+          if (currentPrizeIdx >= prizes.length)
+            Swal.fire("所有獎項已抽完", "請新增獎項或重新整理頁面", "info");
           return;
         }
 
         isDrawing = true;
         const winnerIdx = Math.floor(Math.random() * participants.length);
-        const rounds = 20 + Math.floor(Math.random() * 10);
-        let step = 0;
-        const timer = setInterval(() => {
-          const idx = (winnerIdx + step) % participants.length;
-          highlightWheel(idx);
-          playTick();
-          step++;
-          if (step > rounds) {
-            clearInterval(timer);
-            setTimeout(() => showWinner(winnerIdx), 500);
-          }
-        }, 80);
+        const winner = participants[winnerIdx];
+        const prizeName = prizes[currentPrizeIdx].name;
+
+        runGachaAnimationPro(winner, prizeName, () => showWinner(winnerIdx));
       });
 
       function showWinner(winnerIdx) {
         const winner = participants[winnerIdx];
         const prizeName = prizes[currentPrizeIdx].name;
 
-        // 彈窗
         $("#modalPrize").text("獎項：" + prizeName);
         $("#modalWinner").text(winner);
         bsWinnerModal.show();
@@ -728,7 +1019,6 @@
         playWin();
         fireConfetti();
 
-        // 紀錄（最新在最上面）
         const now = new Date();
         winners.unshift({
           order: winners.length + 1,
@@ -737,30 +1027,26 @@
           time: now.toLocaleString(),
         });
         $("#winnerList").prepend(
-          `<li class="list-group-item">${winners[0].order}. ${winners[0].prize} - ${winners[0].name}
-        <span class="text-muted float-end">${winners[0].time}</span></li>`
+          `<li class="list-group-item">${winners[0].order}. ${winners[0].prize} - ${winners[0].name}<span class="text-muted float-end">${winners[0].time}</span></li>`
         );
 
-        // **一次移除名單中所有重複的中獎者**
+        // 一次移除所有同名
         participants = participants.filter((n) => n !== winner);
         $("#participants").val(participants.join("\n"));
 
-        // 扣獎數 / 切下個獎項
+        // 扣獎數 / 下一獎項
         prizes[currentPrizeIdx].count--;
-        if (prizes[currentPrizeIdx].count <= 0) {
-          currentPrizeIdx++;
-        }
+        if (prizes[currentPrizeIdx].count <= 0) currentPrizeIdx++;
 
-        updateParticipants(); // 會順便重畫轉盤 & 名單區
+        updateParticipants();
         renderPrizes();
         updateCurrentPrize();
         isDrawing = false;
       }
 
       $("#nextDrawBtn").on("click", function () {
-        if (currentPrizeIdx >= prizes.length) {
+        if (currentPrizeIdx >= prizes.length)
           Swal.fire("所有獎項已抽完", "恭喜完成所有抽獎！", "success");
-        }
       });
 
       // 初始
@@ -769,7 +1055,7 @@
         renderPrizes();
         updateCurrentPrize();
         clampNames(true);
-        $("#toggleNames").hide(); // 初始先隱藏，內容長度再決定是否顯示
+        $("#toggleNames").hide();
       });
     </script>
   </body>
