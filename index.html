@@ -65,6 +65,8 @@
           rgba(135, 206, 250, 0.35);
         border: 4px solid #cce9ff;
         box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.06);
+        /* ★ 讓玻璃艙裁切內容（旋轉膠囊不會溢出） */
+        overflow: hidden;
       }
       .gacha-neck {
         position: absolute;
@@ -156,7 +158,7 @@
         transform: rotate(24deg);
       }
 
-      /* 掉落膠囊 */
+      /* 掉落膠囊（到托盤） */
       .capsule {
         --hue: 210;
         position: absolute;
@@ -360,6 +362,65 @@
           transform: translate(65px, 175px) scale(0.92);
         }
       }
+
+      /* ===== 玻璃艙內旋轉膠囊（新增的動畫） ===== */
+      .gacha-inner {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 210px;
+        height: 210px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        border-radius: 50%;
+      }
+      .gacha-inner .track {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 0;
+        height: 0;
+        will-change: transform;
+        animation-duration: var(--dur, 3s);
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+        animation-delay: var(--delay, 0s);
+      }
+      .gacha-inner .track.cw {
+        animation-name: spinCW;
+      }
+      .gacha-inner .track.ccw {
+        animation-name: spinCCW;
+      }
+      .gacha-inner .track .orb {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle at 30% 30%,
+          hsl(var(--hue, 210) 90% 70%),
+          hsl(var(--hue, 210) 80% 45%)
+        );
+        box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+          0 2px 5px rgba(0, 0, 0, 0.18);
+        transform: translateX(var(--r, 80px));
+      }
+      @keyframes spinCW {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes spinCCW {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(-360deg);
+        }
+      }
     </style>
   </head>
   <body>
@@ -512,7 +573,9 @@
                 role="button"
                 aria-label="點擊扭蛋機抽獎"
               >
-                <div class="gacha-glass"></div>
+                <div class="gacha-glass">
+                  <div id="gachaInner" class="gacha-inner"></div>
+                </div>
                 <div class="gacha-neck"></div>
                 <div class="gacha-body">
                   <div class="gacha-slot"></div>
@@ -684,7 +747,7 @@
           .map((x) => x.trim())
           .filter((x) => x !== "");
         $("#count").text(participants.length);
-        updateWheel(); // 沒有畫布會自動 return
+        updateWheel(); // 已改扭蛋機，此函式留空
         updateNamesArea();
       }
       $("#participants").on("input", updateParticipants);
@@ -694,8 +757,85 @@
         updateParticipants();
       });
 
-      // ===== CSV（略：你原本的匯入匯出程式全部保留） =====
-      // --- 名單 CSV ---
+      // ===== CSV 工具 & 匯入匯出（保持你的實作） =====
+      function downloadCsv(csv, filename) {
+        const blob = new Blob(["\ufeff" + csv], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      function toCSV(rows) {
+        return rows
+          .map((r) =>
+            r
+              .map((c) => {
+                const s = String(c ?? "");
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+              })
+              .join(",")
+          )
+          .join("\n");
+      }
+      function parseCSV(text) {
+        const rows = [];
+        let row = [],
+          i = 0,
+          cur = "",
+          inQ = false;
+        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+        while (i < text.length) {
+          const ch = text[i];
+          if (inQ) {
+            if (ch === `"`) {
+              if (text[i + 1] === '"') {
+                cur += '"';
+                i += 2;
+                continue;
+              }
+              inQ = false;
+              i++;
+              continue;
+            }
+            cur += ch;
+            i++;
+            continue;
+          }
+          if (ch === `"`) {
+            inQ = true;
+            i++;
+            continue;
+          }
+          if (ch === ",") {
+            row.push(cur);
+            cur = "";
+            i++;
+            continue;
+          }
+          if (ch === `\n`) {
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = "";
+            i++;
+            continue;
+          }
+          if (ch === `\r`) {
+            i++;
+            continue;
+          }
+          cur += ch;
+          i++;
+        }
+        row.push(cur);
+        rows.push(row);
+        return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
+      }
+
       $("#importNamesCsvBtn").on("click", () =>
         $("#importNamesCsvInput").click()
       );
@@ -722,12 +862,13 @@
           Swal.fire("匯入完成", `共 ${names.length} 筆名單`, "success");
         });
       });
-      $("#exportNamesCsvBtn").on("click", () => {
-        const csv = toCSV([["name"], ...participants.map((n) => [n])]);
-        downloadCsv(csv, "participants.csv");
-      });
+      $("#exportNamesCsvBtn").on("click", () =>
+        downloadCsv(
+          toCSV([["name"], ...participants.map((n) => [n])]),
+          "participants.csv"
+        )
+      );
 
-      // --- 獎項 CSV ---
       $("#importPrizesCsvBtn").on("click", () =>
         $("#importPrizesCsvInput").click()
       );
@@ -765,101 +906,25 @@
           Swal.fire("匯入完成", `共 ${list.length} 個獎項`, "success");
         });
       });
-      $("#exportPrizesCsvBtn").on("click", () => {
-        const rows = [
-          ["name", "count"],
-          ...prizes.map((p) => [p.name, String(p.count)]),
-        ];
-        downloadCsv(toCSV(rows), "prizes.csv");
-      });
+      $("#exportPrizesCsvBtn").on("click", () =>
+        downloadCsv(
+          toCSV([
+            ["name", "count"],
+            ...prizes.map((p) => [p.name, String(p.count)]),
+          ]),
+          "prizes.csv"
+        )
+      );
 
-      // --- 中獎 CSV ---
-      $("#exportWinnersCsvBtn").on("click", () => {
-        const rows = [
-          ["order", "prize", "name", "time"],
-          ...winners.map((w) => [w.order, w.prize, w.name, w.time]),
-        ];
-        downloadCsv(toCSV(rows), "winners.csv");
-      });
-
-      // CSV 工具
-      function downloadCsv(csv, filename) {
-        const blob = new Blob(["\ufeff" + csv], {
-          type: "text/csv;charset=utf-8;",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      function toCSV(rows) {
-        return rows
-          .map((r) =>
-            r
-              .map((c) => {
-                const s = String(c ?? "");
-                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-              })
-              .join(",")
-          )
-          .join("\n");
-      }
-      function parseCSV(text) {
-        const rows = [];
-        let row = [],
-          i = 0,
-          cur = "",
-          inQ = false;
-        if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
-        while (i < text.length) {
-          const ch = text[i];
-          if (inQ) {
-            if (ch === '"') {
-              if (text[i + 1] === '"') {
-                cur += '"';
-                i += 2;
-                continue;
-              }
-              inQ = false;
-              i++;
-              continue;
-            }
-            cur += ch;
-            i++;
-            continue;
-          }
-          if (ch === '"') {
-            inQ = true;
-            i++;
-            continue;
-          }
-          if (ch === ",") {
-            row.push(cur);
-            cur = "";
-            i++;
-            continue;
-          }
-          if (ch === "\n") {
-            row.push(cur);
-            rows.push(row);
-            row = [];
-            cur = "";
-            i++;
-            continue;
-          }
-          if (ch === "\r") {
-            i++;
-            continue;
-          }
-          cur += ch;
-          i++;
-        }
-        row.push(cur);
-        rows.push(row);
-        return rows.filter((r) => !(r.length === 1 && r[0].trim() === ""));
-      }
+      $("#exportWinnersCsvBtn").on("click", () =>
+        downloadCsv(
+          toCSV([
+            ["order", "prize", "name", "time"],
+            ...winners.map((w) => [w.order, w.prize, w.name, w.time]),
+          ]),
+          "winners.csv"
+        )
+      );
 
       // ===== 獎項新增 / 排序 / 刪除 =====
       $("#addPrize").on("click", function () {
@@ -881,11 +946,11 @@
         const $list = $("#prizeList").empty();
         prizes.forEach((p, i) =>
           $list.append(`<div class="list-group-item d-flex justify-content-between align-items-center" data-idx="${i}">
-        <span>${i + 1}. ${p.name} <span class="badge bg-secondary">${
+          <span>${i + 1}. ${p.name} <span class="badge bg-secondary">${
             p.count
           }</span></span>
-        <button type="button" class="btn btn-danger btn-sm removePrize">刪除</button>
-      </div>`)
+          <button type="button" class="btn btn-danger btn-sm removePrize">刪除</button>
+        </div>`)
         );
         $("#prizeList").sortable({
           update: function () {
@@ -909,7 +974,7 @@
         updateCurrentPrize();
       });
 
-      // =====（舊）轉盤：保留空實作以相容既有呼叫 =====
+      // =====（舊）轉盤：保留空實作 =====
       function updateWheel() {
         /* 已改扭蛋機，這裡留白即可 */
       }
@@ -944,11 +1009,51 @@
         else $("#currentPrize").text("所有獎項已抽完");
       }
 
-      // ===== 升級版扭蛋動畫：掉落→分體→金色卡片 =====
+      // ===== 玻璃艙內旋轉膠囊 =====
+      function startGlassSpin() {
+        const $inner = $("#gachaInner");
+        if (!$inner.length) return;
+
+        // ★ 已經有軌道在跑就不要重建（避免重覆 append）
+        if ($inner.children(".track").length) {
+          // 若你曾經用過 pause 也可以在這裡恢復：
+          // $inner.find('.track').css('animation-play-state','running');
+          return;
+        }
+
+        const N = 10; // 玻璃艙內同時看見幾顆小膠囊
+        for (let i = 0; i < N; i++) {
+          const r = 55 + Math.random() * 38; // 半徑
+          const hue = Math.floor(Math.random() * 360); // 顏色
+          const dur = (2.2 + Math.random() * 2.4).toFixed(2) + "s"; // 旋轉時間
+          const del = (-Math.random() * 3).toFixed(2) + "s"; // 啟動延遲
+          const dir = Math.random() < 0.5 ? "cw" : "ccw"; // 方向
+
+          const $track = $(`<div class="track ${dir}"></div>`).css({
+            "--dur": dur,
+            "--delay": del,
+          });
+          const $orb = $('<div class="orb"></div>').css({
+            "--hue": hue,
+            "--r": `${r}px`,
+          });
+
+          $track.append($orb);
+          $inner.append($track);
+        }
+      }
+      function stopGlassSpin() {
+        $("#gachaInner").empty();
+      }
+
+      // ===== 升級版扭蛋動畫：掉落→分體→金色卡片（含玻璃艙旋轉啟停） =====
       function runGachaAnimationPro(winnerName, prizeName, done) {
         const $m = $("#gachaMachine");
         $m.addClass("crank");
         setTimeout(() => $m.removeClass("crank"), 700);
+
+        // 開始玻璃艙旋轉
+        startGlassSpin();
 
         const hue = Math.floor(Math.random() * 360);
         const $drop = $('<div class="capsule"></div>').css("--hue", hue);
@@ -957,17 +1062,21 @@
         requestAnimationFrame(() => $drop.addClass("animate"));
 
         setTimeout(() => {
+          // 停止玻璃艙旋轉
+          // stopGlassSpin();
+
           $drop.remove();
-          const $r = $(`
-          <div class="capsule-x" style="--hue:${hue}">
-            <div class="half top"></div>
-            <div class="half bottom"></div>
-            <div class="ticket"><div class="t1">🏆 ${prizeName}</div><div class="t2">👤 ${winnerName}</div></div>
-          </div>`);
+          const $r = $(`<div class="capsule-x" style="--hue:${hue}">
+              <div class="half top"></div>
+              <div class="half bottom"></div>
+              <div class="ticket"><div class="t1">🏆 ${prizeName}</div><div class="t2">👤 ${winnerName}</div></div>
+            </div>`);
           $m.append($r);
+
           playOpen();
           requestAnimationFrame(() => $r.addClass("reveal"));
           fireConfetti();
+
           setTimeout(() => {
             $r.addClass("fadeout");
             done && done();
@@ -999,12 +1108,10 @@
             Swal.fire("所有獎項已抽完", "請新增獎項或重新整理頁面", "info");
           return;
         }
-
         isDrawing = true;
         const winnerIdx = Math.floor(Math.random() * participants.length);
         const winner = participants[winnerIdx];
         const prizeName = prizes[currentPrizeIdx].name;
-
         runGachaAnimationPro(winner, prizeName, () => showWinner(winnerIdx));
       });
 
@@ -1056,6 +1163,7 @@
         updateCurrentPrize();
         clampNames(true);
         $("#toggleNames").hide();
+        startGlassSpin();
       });
     </script>
   </body>
